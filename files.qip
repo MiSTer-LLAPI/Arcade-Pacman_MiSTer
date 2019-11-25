@@ -9,3 +9,4 @@ set_global_assignment -name VHDL_FILE pacman_video.vhd
 set_global_assignment -name VHDL_FILE pacman_audio.vhd
 set_global_assignment -name VHDL_FILE pacman.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE "Arcade-Pacman.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "llapi.sv"
