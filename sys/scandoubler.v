@@ -2,7 +2,7 @@
 // scandoubler.v
 // 
 // Copyright (c) 2015 Till Harbaum <till@harbaum.org> 
-// Copyright (c) 2017-2019 Sorgelig
+// Copyright (c) 2017-2021 Alexey Melnikov
 // 
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU General Public License as published 
@@ -23,23 +23,20 @@ module scandoubler #(parameter LENGTH, parameter HALF_DEPTH)
 (
 	// system interface
 	input             clk_vid,
-	input             ce_pix,
-	output            ce_pix_out,
-
 	input             hq2x,
 
 	// shifter video interface
+	input             ce_pix,
 	input             hs_in,
 	input             vs_in,
 	input             hb_in,
 	input             vb_in,
-
 	input  [DWIDTH:0] r_in,
 	input  [DWIDTH:0] g_in,
 	input  [DWIDTH:0] b_in,
-	input             mono,
 
 	// output interface
+	output            ce_pix_out,
 	output reg        hs_out,
 	output            vs_out,
 	output            hb_out,
@@ -59,7 +56,7 @@ wire [7:0] pc_in = pix_in_cnt + 1'b1;
 reg  [7:0] pixsz, pixsz2, pixsz4 = 0;
 
 reg ce_x4i, ce_x1i;
-always @(negedge clk_vid) begin
+always @(posedge clk_vid) begin
 	reg old_ce, valid, hs;
 
 	if(~&pix_len) pix_len <= pl;
@@ -109,7 +106,6 @@ Hq2x #(.LENGTH(LENGTH), .HALF_DEPTH(HALF_DEPTH)) Hq2x
 
 	.ce_in(ce_x4i),
 	.inputpixel({b_d,g_d,r_d}),
-	.mono(mono),
 	.disable_hq2x(~hq2x),
 	.reset_frame(vb_in),
 	.reset_line(req_line_reset),
@@ -124,7 +120,7 @@ reg  [7:0] pix_out_cnt = 0;
 wire [7:0] pc_out = pix_out_cnt + 1'b1;
 
 reg ce_x4o, ce_x2o;
-always @(negedge clk_vid) begin
+always @(posedge clk_vid) begin
 	reg hs;
 
 	if(~&pix_out_cnt) pix_out_cnt <= pc_out;
