@@ -29,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [45:0] HPS_BUS,
+	inout  [48:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -52,6 +52,7 @@ module emu
 	output        VGA_F1,
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
+	output		  VGA_DISABLE,
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
@@ -179,25 +180,38 @@ assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQM
 
 assign VGA_F1    = 0;
 assign VGA_SCALER= 0;
+
 //LLAPI
 //assign USER_OUT  = '1;
 //END
+
 assign LED_USER  = ioctl_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
+
+//LLAPI
 assign BUTTONS   = llapi_osd;
+//END
+
 assign AUDIO_MIX = 0;
 assign FB_FORCE_BLANK = 0;
 assign HDMI_FREEZE = 0;
+assign VGA_DISABLE = 0;
 
 wire [1:0] ar = status[15:14];
 
-assign VIDEO_ARX = (!ar) ? ((status[2] | mod_ponp) ? 8'd4 : 8'd3) : (ar - 1'd1);
-assign VIDEO_ARY = (!ar) ? ((status[2] | mod_ponp) ? 8'd3 : 8'd4) : 12'd0;
+assign VIDEO_ARX = (!ar) ? ((status[2] | mod_ponp) ? 12'd2880 : 12'd2219) : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? ((status[2] | mod_ponp) ? 12'd2219 : 12'd2880) : 12'd0;
 
 `include "build_id.v" 
 localparam CONF_STR = {
 	"A.PACMAN;;",
+	//LLAPI: OSD menu item
+	//LLAPI Always ON
+	"-,<< LLAPI enabled >>;",
+	"-,<< Use USER I/O port >>;",
+	"-;",
+	//END LLAPI	
 	"H0OEF,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"H1H0O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -209,8 +223,6 @@ localparam CONF_STR = {
 	"P1,Pause options;",
 	"P1ON,Pause when OSD is open,On,Off;",
 	"P1OO,Dim video after 10s,On,Off;",
-	"-;",
-	"OM,Serial Mode,Off,LLAPI;",
 	"-;",
 	"DIP;",
 	"-;",
@@ -277,7 +289,10 @@ wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire  [7:0] ioctl_din;
 
-//LLAPI modification needed
+//LLAPI
+wire [15:0] joy1 = (mod_club | mod_jmpst) ? (joy_ll_a): (joystick_0 | joystick_1 | joy_ll_a | joy_ll_b);
+wire [15:0] joy2 = (mod_club | mod_jmpst) ? (joy_ll_b): (joystick_0 | joystick_1 | joy_ll_a | joy_ll_b);
+
 wire [15:0] joystick_0;
 wire [15:0] joystick_1;
 //END LLAPI
@@ -296,6 +311,7 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.forced_scandoubler(forced_scandoubler),
 	.gamma_bus(gamma_bus),
 	.direct_video(direct_video),
+	.video_rotated(video_rotated),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_upload(ioctl_upload),
@@ -305,13 +321,144 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_dout(ioctl_dout),
 	.ioctl_din(ioctl_din),
 	.ioctl_index(ioctl_index),
-
-	//LLAPI Modifcation needed
+	//LLAPI`
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1)
 	//END LLAPI
-	
 );
+
+reg mod_plus = 0;
+reg mod_jmpst= 0;
+reg mod_club = 0;
+reg mod_orig = 0;
+//reg mod_crush= 0;
+reg mod_bird = 0;
+reg mod_ms   = 0;
+reg mod_gork = 0;
+reg mod_mrtnt= 0;
+reg mod_woodp= 0;
+reg mod_eeek = 0;
+reg mod_alib = 0;
+reg mod_ponp = 0;
+reg mod_van  = 0;
+reg mod_pmm  = 0;
+reg mod_dshop= 0;
+reg mod_glob = 0;
+reg mod_numcr= 0;
+
+wire mod_gm = mod_gork | mod_mrtnt;
+
+always @(posedge clk_sys) begin
+	reg [7:0] mod = 0;
+	if (ioctl_wr & (ioctl_index==1)) mod <= ioctl_dout;
+
+	mod_orig <= (mod == 0);
+	mod_plus <= (mod == 1);
+	mod_club <= (mod == 2);
+	//mod_crush<= (mod == 3);
+	mod_bird <= (mod == 4);
+	mod_ms   <= (mod == 5);
+	mod_gork <= (mod == 6);
+	mod_mrtnt<= (mod == 7);
+	mod_woodp<= (mod == 8);
+	mod_eeek <= (mod == 9);
+	mod_alib <= (mod == 10);
+	mod_ponp <= (mod == 11);
+	mod_van  <= (mod == 12);
+	mod_pmm  <= (mod == 13);
+	mod_dshop<= (mod == 14);
+	mod_glob <= (mod == 15);
+	mod_jmpst<= (mod == 16);
+	mod_numcr<= (mod == 17);
+end
+
+reg [7:0] sw[8];
+always @(posedge clk_sys) if (ioctl_wr && (ioctl_index==254) && !ioctl_addr[24:3]) sw[ioctl_addr[2:0]] <= ioctl_dout;
+
+wire m_up,m_down,m_left,m_right;
+joyonedir jod
+(
+	clk_sys,
+	mod_bird,
+	{
+		joy1[3],
+		joy1[2],
+		joy1[1],
+		joy1[0]
+	},
+	{m_up,m_down,m_left,m_right}
+);
+
+wire m_up_2,m_down_2,m_left_2,m_right_2;
+joyonedir jod_2
+(
+	clk_sys,
+	mod_bird,
+	{
+		joy2[3],
+		joy2[2],
+		joy2[1],
+		joy2[0]
+	},
+	{m_up_2,m_down_2,m_left_2,m_right_2}
+);
+
+wire m_fire     = joy1[4];
+wire m_fire_2   = joy2[4];
+wire m_start    = joy1[5] | joy2[5];
+wire m_start_2  = joy1[6] | joy2[6];
+wire m_coin     = joy1[7] | joy2[7];
+wire m_cheat    = joy1[8] | joy2[8];
+wire m_pause    = joy1[9] | joy2[9];
+
+// PAUSE SYSTEM
+wire				pause_cpu;
+wire [7:0]		rgb_out;
+pause #(3,3,2,24) pause (
+	.*,
+	.user_button(m_pause),
+	.pause_request(hs_pause),
+	.options(~status[24:23])
+);
+
+wire hblank, vblank;
+wire ce_vid = ce_6m;
+wire hs, vs;
+wire [2:0] r,g;
+wire [1:0] b;
+
+arcade_video #(288,8) arcade_video
+(
+	.*,
+
+	.clk_video(clk_vid),
+	.ce_pix(ce_vid),
+
+	.RGB_in(rgb_out),
+	.HBlank(hblank),
+	.VBlank(vblank),
+	.HSync(hs),
+	.VSync(vs),
+
+	.fx(status[5:3])
+);
+
+wire no_rotate = status[2] | direct_video | mod_ponp;
+wire rotate_ccw = 0;
+wire flip = 0;
+wire video_rotated;
+screen_rotate screen_rotate (.*);
+
+wire [9:0] audio;
+assign AUDIO_L = {audio, 6'd0};
+assign AUDIO_R = AUDIO_L;
+assign AUDIO_S = mod_van;
+
+wire [7:0] in0xor = mod_ponp ? 8'hE0 : 8'hFF;
+wire [7:0] in1xor = mod_ponp ? 8'h00 : 8'hFF;
+
+wire reset;
+assign reset = RESET | status[0] | buttons[1];
 
 ////////////////////////////  LLAPI  ///////////////////////////////////
 
@@ -320,7 +467,7 @@ wire [71:0] llapi_analog, llapi_analog2;
 wire [7:0]  llapi_type, llapi_type2;
 wire llapi_en, llapi_en2;
 
-wire llapi_select = status[22];
+wire llapi_select = 1'b1;
 
 wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
 
@@ -412,156 +559,7 @@ wire [15:0] joy_ll_b = { 8'd0,
 wire llapi_osd = (llapi_buttons[26] && llapi_buttons[5] && llapi_buttons[0]) || (llapi_buttons2[26] && llapi_buttons2[5] && llapi_buttons2[0]);
 
 
-
-/* if LLAPI is enabled, shift USB controllers over to the next available player slot
-wire [15:0] joy1, joy2;
-
-
-always_comb begin
-        if (use_llapi & use_llapi2) begin
-                joy1 = joy_ll_a;
-                joy2 = joy_ll_b;
-        end else if (use_llapi ^ use_llapi2) begin
-                joy1 = use_llapi  ? joy_ll_a : joystick_0;
-                joy2 = use_llapi2 ? joy_ll_b : joystick_0;
-        end else begin
-                joy1 = joystick_0;
-                joy2 = joystick_1;
-        end
-end*/
-
-wire [15:0] joy1 = (mod_club | mod_jmpst) ? (joy_ll_a): (joystick_0 | joystick_1 | joy_ll_a | joy_ll_b);
-wire [15:0] joy2 = (mod_club | mod_jmpst) ? (joy_ll_b): (joystick_0 | joystick_1 | joy_ll_a | joy_ll_b);
-////////////////////////     END LLAPI    /////////////////////////
-
-reg mod_plus = 0;
-reg mod_jmpst= 0;
-reg mod_club = 0;
-reg mod_orig = 0;
-//reg mod_crush= 0;
-reg mod_bird = 0;
-reg mod_ms   = 0;
-reg mod_gork = 0;
-reg mod_mrtnt= 0;
-reg mod_woodp= 0;
-reg mod_eeek = 0;
-reg mod_alib = 0;
-reg mod_ponp = 0;
-reg mod_van  = 0;
-reg mod_pmm  = 0;
-reg mod_dshop= 0;
-reg mod_glob = 0;
-
-wire mod_gm = mod_gork | mod_mrtnt;
-
-always @(posedge clk_sys) begin
-	reg [7:0] mod = 0;
-	if (ioctl_wr & (ioctl_index==1)) mod <= ioctl_dout;
-
-	mod_orig <= (mod == 0);
-	mod_plus <= (mod == 1);
-	mod_club <= (mod == 2);
-	//mod_crush<= (mod == 3);
-	mod_bird <= (mod == 4);
-	mod_ms   <= (mod == 5);
-	mod_gork <= (mod == 6);
-	mod_mrtnt<= (mod == 7);
-	mod_woodp<= (mod == 8);
-	mod_eeek <= (mod == 9);
-	mod_alib <= (mod == 10);
-	mod_ponp <= (mod == 11);
-	mod_van  <= (mod == 12);
-	mod_pmm  <= (mod == 13);
-	mod_dshop<= (mod == 14);
-	mod_glob <= (mod == 15);
-	mod_jmpst<= (mod == 16);
-end
-
-reg [7:0] sw[8];
-always @(posedge clk_sys) if (ioctl_wr && (ioctl_index==254) && !ioctl_addr[24:3]) sw[ioctl_addr[2:0]] <= ioctl_dout;
-
-wire m_up,m_down,m_left,m_right;
-joyonedir jod
-(
-	clk_sys,
-	mod_bird,
-	{
-		joy1[3],
-		joy1[2],
-		joy1[1],
-		joy1[0]
-	},
-	{m_up,m_down,m_left,m_right}
-);
-
-wire m_up_2,m_down_2,m_left_2,m_right_2;
-joyonedir jod_2
-(
-	clk_sys,
-	mod_bird,
-	{
-		joy2[3],
-		joy2[2],
-		joy2[1],
-		joy2[0]
-	},
-	{m_up_2,m_down_2,m_left_2,m_right_2}
-);
-
-wire m_fire     = joy1[4];
-wire m_fire_2   = joy2[4];
-wire m_start    = joy1[5] | joy2[5];
-wire m_start_2  = joy1[6] | joy2[6];
-wire m_coin     = joy1[7] | joy2[7];
-wire m_cheat    = joy1[8] | joy2[8];
-wire m_pause    = joy1[9] | joy2[9];
-
-// PAUSE SYSTEM
-wire				pause_cpu;
-wire [7:0]		rgb_out;
-pause #(3,3,2,24) pause (
-	.*,
-	.user_button(m_pause),
-	.pause_request(hs_pause),
-	.options(~status[24:23])
-);
-
-wire hblank, vblank;
-wire ce_vid = ce_6m;
-wire hs, vs;
-wire [2:0] r,g;
-wire [1:0] b;
-
-arcade_video #(288,8) arcade_video
-(
-	.*,
-
-	.clk_video(clk_vid),
-	.ce_pix(ce_vid),
-
-	.RGB_in(rgb_out),
-	.HBlank(hblank),
-	.VBlank(vblank),
-	.HSync(hs),
-	.VSync(vs),
-
-	.fx(status[5:3])
-);
-
-wire no_rotate = status[2] | direct_video | mod_ponp;
-wire rotate_ccw = 0;
-screen_rotate screen_rotate (.*);
-
-wire [9:0] audio;
-assign AUDIO_L = {audio, 6'd0};
-assign AUDIO_R = AUDIO_L;
-assign AUDIO_S = mod_van;
-
-wire [7:0] in0xor = mod_ponp ? 8'hE0 : 8'hFF;
-wire [7:0] in1xor = mod_ponp ? 8'h00 : 8'hFF;
-
-wire reset;
-assign reset = RESET | status[0] | buttons[1];
+//////////////////////////////////////// END LLAPI ////////////////////////////////////////////
 
 pacman pacman
 (
@@ -581,27 +579,28 @@ pacman pacman
 
 	.in0(sw[0] & (in0xor ^ {
 		mod_eeek & m_fire_2,
-		mod_alib & m_fire,
-		m_coin,
-		((mod_orig | mod_plus | mod_ms | mod_bird | mod_alib | mod_woodp) & m_cheat) | ((mod_ponp | mod_van | mod_dshop) & m_fire),
+		(mod_alib & m_fire) | ( mod_numcr ),
+		~mod_numcr & m_coin,
+		((mod_orig | mod_plus | mod_ms | mod_bird | mod_alib | mod_woodp | mod_numcr) & m_cheat) | ((mod_ponp | mod_van | mod_dshop) & m_fire),
 		m_down,
-		m_right,
-		m_left,
+		(~mod_numcr & m_right) | ( mod_numcr & m_left  ),
+		(~mod_numcr & m_left ) | ( mod_numcr & m_right ),
 		m_up
 	})),
 
 	.in1(sw[1] & (in1xor ^ {
-		mod_gm & m_fire_2,
-		m_start_2 | (mod_eeek & m_fire) | (mod_jmpst & m_fire_2),
-		m_start   | (mod_jmpst & m_fire),
+		(mod_gm & m_fire_2) ,
+		m_start_2 | (mod_eeek & m_fire) | (mod_jmpst & m_fire_2) | (mod_numcr & m_start),
+		(~mod_numcr&m_start)   | (mod_jmpst & m_fire) | (mod_numcr & m_coin),
 		(mod_gm & m_fire) | ((mod_alib | mod_ponp | mod_van | mod_dshop) & m_fire_2),
 		~mod_pmm & m_down_2,
 		mod_pmm ? m_fire : m_right_2,
 		~mod_pmm & m_left_2,
-		~mod_pmm & m_up_2
+		(~mod_pmm & m_up_2) | (mod_numcr&m_fire)
 	})),
+	
 	.dipsw1(sw[2]),
-	.dipsw2((mod_ponp | mod_van | mod_dshop) ? sw[3] : 8'hFF),
+	.dipsw2((mod_numcr| mod_ponp | mod_van | mod_dshop) ? sw[3] : 8'hFF),
 
 	.mod_plus(mod_plus),
 	.mod_jmpst(mod_jmpst),
