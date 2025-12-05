@@ -2,8 +2,7 @@ LLAPI Note :
 
 1. Place the rbf core file in a folder named _LLAPI/cores/
 2. Place the MRAs files in _LLAPI/_Arcade/
-3. Dont forget to enable LLAPI in the core OSD (this has to be done for each MRA for now)
-4. Play !
+3. Play !
 
 In order to play with 2 players you need to insert 2 coins at least and press START2P button.
 This button has been mapped to the LEFT shoulder button (SNES controller used as a reference)
